@@ -27,21 +27,27 @@ type APIResponse struct {
 
 func main() {
 	for {
+		time.Sleep(requestInterval)
 		slog.Info("requesting new price")
 		ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 		if err != nil {
-			slog.Error(err.Error())
+			slog.Error("error creating request.", "error", err)
+			continue
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
+			slog.Error("error making request.", "error", err)
+			continue
+		}
+		defer resp.Body.Close()
+		if resp != nil {
 			if resp.StatusCode == http.StatusInternalServerError {
-				slog.Error(err.Error())
+				slog.Error("request failed.", "status", resp.StatusCode)
 				continue
 			}
 		}
-		defer resp.Body.Close()
 		result, err := decodeResponse(resp)
 		if err != nil {
 			slog.Error("error decoding response.", "error", err)
@@ -56,7 +62,6 @@ func main() {
 			slog.Error("error saving to file.", "error", err)
 			continue
 		}
-		time.Sleep(requestInterval)
 	}
 }
 
