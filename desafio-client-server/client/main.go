@@ -8,17 +8,21 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
 const (
-	apiURL     = "http://localhost:8080/cotacao"
-	apiTimeout = 300 * time.Millisecond
-	fileName   = "cotacao.txt"
+	apiURL          = "http://localhost:8080/cotacao"
+	apiTimeout      = 300 * time.Millisecond
+	fileName        = "cotacao.txt"
+	requestInterval = 1 * time.Second
 )
 
-type Cotacao struct {
-	Dolar float64
+type APIResponse struct {
+	USDBRL struct {
+		Bid string `json:"bid"`
+	} `json:"USDBRL"`
 }
 
 func main() {
@@ -30,7 +34,6 @@ func main() {
 		if err != nil {
 			slog.Error(err.Error())
 		}
-		//TODO this
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			if resp.StatusCode == http.StatusInternalServerError {
@@ -39,32 +42,40 @@ func main() {
 			}
 		}
 		defer resp.Body.Close()
-		raw, err := io.ReadAll(resp.Body)
+		result, err := decodeResponse(resp)
 		if err != nil {
-			slog.Error("error reading resp body", err)
+			slog.Error("error decoding response.", "error", err)
 			continue
 		}
-		var c Cotacao
-		if err = json.Unmarshal(raw, &c); err != nil {
-			slog.Error("error unmarshalling json", err)
+		fetchedValue, err := strconv.ParseFloat(result.USDBRL.Bid, 64)
+		if err != nil {
+			slog.Error("error converting fetched dolar.", "error", err)
 			continue
 		}
-		if err = saveToFile(c); err != nil {
-			slog.Error("error saving to file", err)
+		if err = saveToFile(fetchedValue); err != nil {
+			slog.Error("error saving to file.", "error", err)
 			continue
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(requestInterval)
 	}
 }
 
-//TODO append file instead of overwriting it
-func saveToFile(c Cotacao) error {
+func decodeResponse(resp *http.Response) (result APIResponse, err error) {
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(raw, &result)
+	return
+}
+
+func saveToFile(dolar float64) error {
 	file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	defer file.Close()
 	if err != nil {
 		return err
 	}
-	content := fmt.Sprintf("Dólar:%v", c.Dolar)
+	content := fmt.Sprintf("Dólar:%v", dolar)
 	_, err = file.WriteString(content + "\n")
 	return err
 }
