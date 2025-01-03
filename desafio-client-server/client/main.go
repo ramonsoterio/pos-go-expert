@@ -13,10 +13,9 @@ import (
 )
 
 const (
-	apiURL          = "http://localhost:8080/cotacao"
-	apiTimeout      = 300 * time.Millisecond
-	fileName        = "cotacao.txt"
-	requestInterval = 1 * time.Second
+	apiURL     = "http://localhost:8080/cotacao"
+	apiTimeout = 300 * time.Millisecond
+	fileName   = "cotacao.txt"
 )
 
 type APIResponse struct {
@@ -26,42 +25,39 @@ type APIResponse struct {
 }
 
 func main() {
-	for {
-		time.Sleep(requestInterval)
-		slog.Info("requesting new price")
-		ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
-		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-		if err != nil {
-			slog.Error("error creating request.", "error", err)
-			continue
+	slog.Info("requesting new price")
+	ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		slog.Error("error creating request.", "error", err)
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Error("error making request.", "error", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp != nil {
+		if resp.StatusCode == http.StatusInternalServerError {
+			slog.Error("request failed.", "status", resp.StatusCode)
+			return
 		}
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			slog.Error("error making request.", "error", err)
-			continue
-		}
-		defer resp.Body.Close()
-		if resp != nil {
-			if resp.StatusCode == http.StatusInternalServerError {
-				slog.Error("request failed.", "status", resp.StatusCode)
-				continue
-			}
-		}
-		result, err := decodeResponse(resp)
-		if err != nil {
-			slog.Error("error decoding response.", "error", err)
-			continue
-		}
-		fetchedValue, err := strconv.ParseFloat(result.USDBRL.Bid, 64)
-		if err != nil {
-			slog.Error("error converting fetched dolar.", "error", err)
-			continue
-		}
-		if err = saveToFile(fetchedValue); err != nil {
-			slog.Error("error saving to file.", "error", err)
-			continue
-		}
+	}
+	result, err := decodeResponse(resp)
+	if err != nil {
+		slog.Error("error decoding response.", "error", err)
+		return
+	}
+	fetchedValue, err := strconv.ParseFloat(result.USDBRL.Bid, 64)
+	if err != nil {
+		slog.Error("error converting fetched dolar.", "error", err)
+		return
+	}
+	slog.Info("request successful.", "value", fetchedValue)
+	if err = saveToFile(fetchedValue); err != nil {
+		slog.Error("error saving to file.", "error", err)
 	}
 }
 
