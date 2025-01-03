@@ -64,21 +64,26 @@ func setupDB() (db *sql.DB, err error) {
 }
 
 func priceHandler(w http.ResponseWriter, r *http.Request) {
-	slog.Info("request received")
+	statusCode := http.StatusOK
+	defer func() {
+		slog.Info("request completed", "status_code", statusCode)
+	}()
 	result, err := fetchPrice(r.Context())
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		statusCode = http.StatusInternalServerError
+		w.WriteHeader(statusCode)
 		return
 	}
 	timeoutContext, cancel := context.WithTimeout(r.Context(), dbTimeout)
 	defer cancel()
 	_, err = db.ExecContext(timeoutContext, "INSERT INTO prices (value) VALUES (?)", result.USDBRL.Bid)
 	if err != nil {
+		statusCode = http.StatusInternalServerError
 		w.Write([]byte("error saving price to the database."))
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(statusCode)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(result)
 }
 
