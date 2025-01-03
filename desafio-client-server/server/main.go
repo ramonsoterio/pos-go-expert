@@ -48,7 +48,7 @@ func main() {
 	}
 	http.HandleFunc("/cotacao", priceHandler)
 	slog.Info("application started")
-	http.ListenAndServe(":8080", nil)
+	err = http.ListenAndServe(":8080", nil)
 	log.Fatal(err)
 }
 
